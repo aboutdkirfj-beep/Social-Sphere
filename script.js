@@ -1,598 +1,418 @@
-// Global variables
-let scene, camera, renderer, sphere, controls;
-let posts = [];
-let currentView = '3d';
-let autoRotate = false;
-let selectedPost = null;
-let postDots = [];
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-// User ID for anonymous voting
-const USER_ID = localStorage.getItem('socialSphere_userId') || (() => {
-    const id = 'user_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('socialSphere_userId', id);
-    return id;
-})();
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f0f23 0%, #1e1e3f 100%);
+    color: white;
+    overflow: hidden;
+    height: 100vh;
+}
 
-// Initialize the application
-function init() {
-    loadPosts();
-    setupScene();
-    setupEventListeners();
-    animate();
-    
-    if (currentView === '3d') {
-        showSphereView();
-    } else {
-        showListView();
+#app {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Header */
+.header {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    padding: 16px 24px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    color: #1a1a1a;
+    font-size: 1.75rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #1a1a1a;
+    font-weight: 600;
+}
+
+.pulse-dot {
+    width: 12px;
+    height: 12px;
+    background: #10b981;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Canvas */
+#canvas-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* Controls */
+.controls {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    padding: 12px;
+    border-radius: 60px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.view-toggle {
+    display: flex;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50px;
+    padding: 6px;
+    gap: 6px;
+}
+
+.btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 12px 16px;
+    border-radius: 50px;
+    font-size: 18px;
+    transition: all 0.3s ease;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn.primary {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 4px 20px rgba(79, 70, 229, 0.4);
+}
+
+.btn.primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(79, 70, 229, 0.6);
+}
+
+.btn.active {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+}
+
+/* List View */
+#list-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    overflow-y: auto;
+    padding: 120px 20px 120px;
+}
+
+#posts-list {
+    max-width: 700px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.post-card {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    color: #1a1a1a;
+    transition: transform 0.3s ease;
+}
+
+.post-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.post-content {
+    margin-bottom: 16px;
+    line-height: 1.6;
+    font-size: 1.1rem;
+}
+
+.post-meta {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-bottom: 20px;
+}
+
+.post-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    color: #64748b;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-btn:hover {
+    background: #f1f5f9;
+    transform: translateY(-1px);
+}
+
+.action-btn.liked {
+    color: #ef4444;
+    background: #fef2f2;
+}
+
+.action-btn.disliked {
+    color: #3b82f6;
+    background: #eff6ff;
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    backdrop-filter: blur(10px);
+}
+
+.modal-content {
+    background: white;
+    border-radius: 24px;
+    padding: 32px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: #1a1a1a;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+#post-content, #reply-content {
+    width: 100%;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 16px;
+    font-family: inherit;
+    font-size: 16px;
+    resize: vertical;
+    margin-bottom: 20px;
+    transition: border-color 0.3s ease;
+}
+
+#post-content:focus, #reply-content:focus {
+    outline: none;
+    border-color: #4f46e5;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#char-count {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.reply-section {
+    margin: 24px 0;
+    padding-top: 24px;
+    border-top: 2px solid #e2e8f0;
+}
+
+#replies-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.reply-item {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border-left: 4px solid #e2e8f0;
+}
+
+.reply-content {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.reply-meta {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* Instructions */
+.instructions {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 0.9rem;
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+}
+
+/* Notifications */
+#notifications {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    z-index: 1001;
+}
+
+.notification {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
+    animation: slideIn 0.5s ease;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.notification:hover {
+    transform: translateX(-5px);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
     }
 }
 
-// Setup Three.js scene
-function setupScene() {
-    const container = document.getElementById('canvas-container');
-    
-    // Scene
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0f0f23);
-    
-    // Camera
-    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 10);
-    
-    // Renderer
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    container.appendChild(renderer.domElement);
-    
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 10, 5);
-    scene.add(directionalLight);
-    
-    // Wireframe sphere
-    const sphereGeometry = new THREE.SphereGeometry(5, 32, 32);
-    const sphereMaterial = new THREE.MeshBasicMaterial({
-        wireframe: true,
-        color: 0x4f46e5,
-        transparent: true,
-        opacity: 0.3
-    });
-    sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    scene.add(sphere);
-    
-    // Mouse controls
-    setupMouseControls();
-    
-    // Create post dots
-    createPostDots();
-    
-    // Handle window resize
-    window.addEventListener('resize', onWindowResize);
+/* Utilities */
+.hidden {
+    display: none !important;
 }
 
-// Setup mouse controls for 3D navigation
-function setupMouseControls() {
-    let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
-    
-    renderer.domElement.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
-    
-    renderer.domElement.addEventListener('mousemove', (e) => {
-        if (isDragging) {
-            const deltaMove = {
-                x: e.clientX - previousMousePosition.x,
-                y: e.clientY - previousMousePosition.y
-            };
-            
-            sphere.rotation.y += deltaMove.x * 0.01;
-            sphere.rotation.x += deltaMove.y * 0.01;
-            
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        }
-    });
-    
-    renderer.domElement.addEventListener('mouseup', () => {
-        isDragging = false;
-    });
-    
-    // Zoom with mouse wheel
-    renderer.domElement.addEventListener('wheel', (e) => {
-        camera.position.z += e.deltaY * 0.01;
-        camera.position.z = Math.max(7, Math.min(15, camera.position.z));
-    });
-    
-    // Touch controls for mobile
-    let lastTouchDistance = 0;
-    
-    renderer.domElement.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1) {
-            isDragging = true;
-            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        } else if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-        }
-    });
-    
-    renderer.domElement.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        if (e.touches.length === 1 && isDragging) {
-            const deltaMove = {
-                x: e.touches[0].clientX - previousMousePosition.x,
-                y: e.touches[0].clientY - previousMousePosition.y
-            };
-            
-            sphere.rotation.y += deltaMove.x * 0.01;
-            sphere.rotation.x += deltaMove.y * 0.01;
-            
-            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        } else if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (lastTouchDistance > 0) {
-                const delta = distance - lastTouchDistance;
-                camera.position.z -= delta * 0.02;
-                camera.position.z = Math.max(7, Math.min(15, camera.position.z));
-            }
-            lastTouchDistance = distance;
-        }
-    });
-    
-    renderer.domElement.addEventListener('touchend', () => {
-        isDragging = false;
-        lastTouchDistance = 0;
-    });
-}
+/* Mobile */
+@media (max-width: 768px) {
+    .header {
+        top: 16px;
+        left: 16px;
+        right: 16px;
+        padding: 12px 20px;
+    }
 
-// Create 3D post dots
-function createPostDots() {
-    // Clear existing dots
-    postDots.forEach(dot => scene.remove(dot));
-    postDots = [];
-    
-    posts.forEach(post => {
-        const dotGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-        const dotMaterial = new THREE.MeshBasicMaterial({
-            color: 0xef4444,
-            transparent: true,
-            opacity: 0.8
-        });
-        
-        const dot = new THREE.Mesh(dotGeometry, dotMaterial);
-        
-        // Position on sphere surface
-        const position = new THREE.Vector3(post.x, post.y, post.z).normalize().multiplyScalar(5);
-        dot.position.copy(position);
-        
-        // Store post reference
-        dot.userData = { post };
-        
-        scene.add(dot);
-        postDots.push(dot);
-    });
-}
+    .header h1 {
+        font-size: 1.5rem;
+    }
 
-// Setup event listeners
-function setupEventListeners() {
-    // View toggle buttons
-    document.getElementById('sphere-view').addEventListener('click', showSphereView);
-    document.getElementById('list-view').addEventListener('click', showListView);
-    
-    // Auto rotate button
-    document.getElementById('auto-rotate').addEventListener('click', () => {
-        autoRotate = !autoRotate;
-        document.getElementById('auto-rotate').classList.toggle('active');
-    });
-    
-    // Create post button
-    document.getElementById('create-post-btn').addEventListener('click', showCreateModal);
-    
-    // Modal controls
-    document.getElementById('cancel-post').addEventListener('click', hideCreateModal);
-    document.getElementById('submit-post').addEventListener('click', createPost);
-    document.getElementById('close-detail').addEventListener('click', hideDetailModal);
-    document.getElementById('submit-reply').addEventListener('click', addReply);
-    
-    // Post content character counter
-    const postContent = document.getElementById('post-content');
-    const charCount = document.getElementById('char-count');
-    postContent.addEventListener('input', () => {
-        charCount.textContent = `${postContent.value.length}/280`;
-    });
-    
-    // Click detection for post dots
-    renderer.domElement.addEventListener('click', onCanvasClick);
-    
-    // Close modals when clicking outside
-    document.getElementById('create-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'create-modal') hideCreateModal();
-    });
-    
-    document.getElementById('detail-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'detail-modal') hideDetailModal();
-    });
-}
+    .controls {
+        bottom: 20px;
+        padding: 10px;
+    }
 
-// Handle canvas clicks for post selection
-function onCanvasClick(event) {
-    const mouse = new THREE.Vector2();
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    
-    const intersects = raycaster.intersectObjects(postDots);
-    
-    if (intersects.length > 0) {
-        const clickedPost = intersects[0].object.userData.post;
-        showPostDetail(clickedPost);
+    .btn {
+        padding: 10px 12px;
+        font-size: 16px;
+    }
+
+    .btn.primary {
+        width: 45px;
+        height: 45px;
+    }
+
+    .modal-content {
+        width: 95%;
+        padding: 24px;
+        margin: 20px;
+    }
+
+    #list-container {
+        padding: 100px 16px 100px;
+    }
+
+    .instructions {
+        bottom: 80px;
+        font-size: 0.8rem;
     }
 }
-
-// Show sphere view
-function showSphereView() {
-    currentView = '3d';
-    document.getElementById('canvas-container').classList.remove('hidden');
-    document.getElementById('list-container').classList.add('hidden');
-    document.getElementById('sphere-view').classList.add('active');
-    document.getElementById('list-view').classList.remove('active');
-}
-
-// Show list view
-function showListView() {
-    currentView = 'list';
-    document.getElementById('canvas-container').classList.add('hidden');
-    document.getElementById('list-container').classList.remove('hidden');
-    document.getElementById('sphere-view').classList.remove('active');
-    document.getElementById('list-view').classList.add('active');
-    renderPostsList();
-}
-
-// Show create post modal
-function showCreateModal() {
-    document.getElementById('create-modal').classList.remove('hidden');
-    document.getElementById('post-content').focus();
-}
-
-// Hide create post modal
-function hideCreateModal() {
-    document.getElementById('create-modal').classList.add('hidden');
-    document.getElementById('post-content').value = '';
-    document.getElementById('char-count').textContent = '0/280';
-}
-
-// Create new post
-function createPost() {
-    const content = document.getElementById('post-content').value.trim();
-    if (!content) return;
-    
-    // Generate random position on sphere
-    const phi = Math.random() * Math.PI * 2;
-    const theta = Math.random() * Math.PI;
-    const x = Math.sin(theta) * Math.cos(phi);
-    const y = Math.sin(theta) * Math.sin(phi);
-    const z = Math.cos(theta);
-    
-    const post = {
-        id: Date.now(),
-        content,
-        x, y, z,
-        likes: 0,
-        dislikes: 0,
-        replies: 0,
-        shares: 0,
-        createdAt: new Date().toISOString(),
-        userVotes: {},
-        postReplies: []
-    };
-    
-    posts.unshift(post);
-    savePosts();
-    createPostDots();
-    
-    if (currentView === 'list') {
-        renderPostsList();
-    }
-    
-    hideCreateModal();
-}
-
-// Show post detail modal
-function showPostDetail(post) {
-    selectedPost = post;
-    const modal = document.getElementById('detail-modal');
-    const content = document.getElementById('post-detail-content');
-    
-    const userVote = post.userVotes[USER_ID] || null;
-    
-    content.innerHTML = `
-        <div class="post-card">
-            <div class="post-content">${post.content}</div>
-            <div class="post-meta">${formatDate(post.createdAt)}</div>
-            <div class="post-actions">
-                <button class="action-btn ${userVote === 'like' ? 'liked' : ''}" onclick="likePost(${post.id})">
-                    ❤️ ${post.likes}
-                </button>
-                <button class="action-btn ${userVote === 'dislike' ? 'disliked' : ''}" onclick="dislikePost(${post.id})">
-                    👎 ${post.dislikes}
-                </button>
-                <button class="action-btn" onclick="sharePost(${post.id})">
-                    📤 ${post.shares}
-                </button>
-                <span class="action-btn">💬 ${post.replies}</span>
-            </div>
-        </div>
-    `;
-    
-    renderReplies();
-    modal.classList.remove('hidden');
-}
-
-// Hide post detail modal
-function hideDetailModal() {
-    document.getElementById('detail-modal').classList.add('hidden');
-    selectedPost = null;
-    document.getElementById('reply-content').value = '';
-}
-
-// Like post
-function likePost(postId) {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    
-    const currentVote = post.userVotes[USER_ID];
-    
-    if (currentVote === 'like') {
-        // Remove like
-        delete post.userVotes[USER_ID];
-        post.likes--;
-    } else if (currentVote === 'dislike') {
-        // Change from dislike to like
-        post.userVotes[USER_ID] = 'like';
-        post.dislikes--;
-        post.likes++;
-    } else {
-        // Add like
-        post.userVotes[USER_ID] = 'like';
-        post.likes++;
-    }
-    
-    savePosts();
-    
-    if (selectedPost && selectedPost.id === postId) {
-        showPostDetail(post);
-    }
-    
-    if (currentView === 'list') {
-        renderPostsList();
-    }
-}
-
-// Dislike post
-function dislikePost(postId) {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    
-    const currentVote = post.userVotes[USER_ID];
-    
-    if (currentVote === 'dislike') {
-        // Remove dislike
-        delete post.userVotes[USER_ID];
-        post.dislikes--;
-    } else if (currentVote === 'like') {
-        // Change from like to dislike
-        post.userVotes[USER_ID] = 'dislike';
-        post.likes--;
-        post.dislikes++;
-    } else {
-        // Add dislike
-        post.userVotes[USER_ID] = 'dislike';
-        post.dislikes++;
-    }
-    
-    savePosts();
-    
-    if (selectedPost && selectedPost.id === postId) {
-        showPostDetail(post);
-    }
-    
-    if (currentView === 'list') {
-        renderPostsList();
-    }
-}
-
-// Share post
-function sharePost(postId) {
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    
-    post.shares++;
-    savePosts();
-    
-    // Copy link to clipboard (simplified)
-    navigator.clipboard.writeText(`Check out this post: "${post.content}"`).then(() => {
-        alert('Post shared to clipboard!');
-    });
-    
-    if (selectedPost && selectedPost.id === postId) {
-        showPostDetail(post);
-    }
-    
-    if (currentView === 'list') {
-        renderPostsList();
-    }
-}
-
-// Add reply to post
-function addReply() {
-    if (!selectedPost) return;
-    
-    const content = document.getElementById('reply-content').value.trim();
-    if (!content) return;
-    
-    const reply = {
-        id: Date.now(),
-        content,
-        createdAt: new Date().toISOString()
-    };
-    
-    if (!selectedPost.postReplies) {
-        selectedPost.postReplies = [];
-    }
-    
-    selectedPost.postReplies.push(reply);
-    selectedPost.replies++;
-    
-    savePosts();
-    renderReplies();
-    document.getElementById('reply-content').value = '';
-    
-    if (currentView === 'list') {
-        renderPostsList();
-    }
-}
-
-// Render replies in detail modal
-function renderReplies() {
-    if (!selectedPost) return;
-    
-    const repliesList = document.getElementById('replies-list');
-    const replies = selectedPost.postReplies || [];
-    
-    if (replies.length === 0) {
-        repliesList.innerHTML = '<p style="color: #64748b; text-align: center;">No replies yet.</p>';
-        return;
-    }
-    
-    repliesList.innerHTML = replies.map(reply => `
-        <div class="reply-item">
-            <div class="reply-content">${reply.content}</div>
-            <div class="reply-meta">${formatDate(reply.createdAt)}</div>
-        </div>
-    `).join('');
-}
-
-// Render posts list view
-function renderPostsList() {
-    const container = document.getElementById('posts-list');
-    
-    if (posts.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: #64748b;">
-                <div style="font-size: 48px; margin-bottom: 16px;">🌐</div>
-                <h3>No posts yet</h3>
-                <p>Be the first to share something on the sphere!</p>
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = posts.map(post => {
-        const userVote = post.userVotes[USER_ID] || null;
-        return `
-            <div class="post-card">
-                <div class="post-content">${post.content}</div>
-                <div class="post-meta">${formatDate(post.createdAt)}</div>
-                <div class="post-actions">
-                    <button class="action-btn ${userVote === 'like' ? 'liked' : ''}" onclick="likePost(${post.id})">
-                        ❤️ ${post.likes}
-                    </button>
-                    <button class="action-btn ${userVote === 'dislike' ? 'disliked' : ''}" onclick="dislikePost(${post.id})">
-                        👎 ${post.dislikes}
-                    </button>
-                    <button class="action-btn" onclick="sharePost(${post.id})">
-                        📤 ${post.shares}
-                    </button>
-                    <span class="action-btn">💬 ${post.replies}</span>
-                    <button class="action-btn" onclick="showPostDetailById(${post.id})" style="margin-left: auto;">
-                        👁️ View
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// Show post detail by ID (for list view)
-function showPostDetailById(postId) {
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-        showPostDetail(post);
-    }
-}
-
-// Animation loop
-function animate() {
-    requestAnimationFrame(animate);
-    
-    if (autoRotate && sphere) {
-        sphere.rotation.y += 0.005;
-    }
-    
-    // Animate post dots
-    postDots.forEach((dot, index) => {
-        const time = Date.now() * 0.001;
-        const scale = 1 + Math.sin(time * 2 + index) * 0.1;
-        dot.scale.setScalar(scale);
-        
-        // Make dots face camera
-        dot.lookAt(camera.position);
-    });
-    
-    if (renderer) {
-        renderer.render(scene, camera);
-    }
-}
-
-// Handle window resize
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// Utility functions
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-function savePosts() {
-    localStorage.setItem('socialSphere_posts', JSON.stringify(posts));
-}
-
-function loadPosts() {
-    const saved = localStorage.getItem('socialSphere_posts');
-    if (saved) {
-        posts = JSON.parse(saved);
-        // Ensure userVotes and postReplies exist
-        posts.forEach(post => {
-            if (!post.userVotes) post.userVotes = {};
-            if (!post.postReplies) post.postReplies = [];
-        });
-    }
-}
-
-// Initialize the app when page loads
-document.addEventListener('DOMContentLoaded', init);
-
-// Make functions global for onclick handlers
-window.likePost = likePost;
-window.dislikePost = dislikePost;
-window.sharePost = sharePost;
-window.showPostDetailById = showPostDetailById;
